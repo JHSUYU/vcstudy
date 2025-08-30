@@ -4,14 +4,19 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import pfl.monitor.MsgSvcOuterClass.CallLog;
+import pfl.monitor.MsgSvcOuterClass.RPCMessageProperties;
 import pfl.monitor.RpcParamsOuterClass.RpcParams;
-import pfl.monitor.RpcParamsOuterClass.RepeatedParam;
 import pfl.signatures.RPCBlockSignature;
 
 import java.time.Instant;
 
 @Aspect
 public abstract class AbstractSolrInstrument extends AbstractHBaseInstrument {
+
+    public AbstractSolrInstrument() throws Exception {
+        super();
+    }
 
     @Pointcut
     public abstract void rpcSend();
@@ -22,26 +27,38 @@ public abstract class AbstractSolrInstrument extends AbstractHBaseInstrument {
 
         Object[] args = thisJoinPoint.getArgs();
 
-        // First arg is SolrRequest, second is collection name
-        if (args.length >= 1) {
+        if (args.length >= 1 && args[0] != null) {
             Object solrRequest = args[0];
-            String collection = args.length > 1 ? (String) args[1] : null;
 
-            // Get the path from the request
+            // 根据参数数量和类型确定 collection
+            String collection = null;
+            Object responseParser = null;
+
+            if (args.length == 2) {
+                // request(SolrRequest, String) 或 request(SolrRequest, ResponseParser)
+                if (args[1] instanceof String) {
+                    collection = (String) args[1];
+                } else {
+                    responseParser = args[1];
+                }
+            } else if (args.length == 3) {
+                // request(SolrRequest, ResponseParser, String)
+                responseParser = args[1];
+                collection = (String) args[2];
+            }
+
             String path = getRequestPath(solrRequest);
-
-            // Build monitoring parameters
             RpcParams monitorParams = buildSolrRpcParams(solrRequest, collection);
 
-            // Check if should block
+            // 检查是否应该阻止
             RPCBlockSignature signature = new RPCBlockSignature(path, monitorParams);
             if (RPCBlockSignature.fuzzyContains(signature, blockedRpcSignature)) {
                 System.out.println("Blocked Solr request: " + path);
                 throw new RuntimeException("Request blocked by deadly retry prevention");
             }
 
-            // Record the request
-            recordSolrRequest(solrRequest, collection, monitorParams, thisJoinPoint.getTarget());
+            // 记录请求 - thisJoinPoint.getThis() 是 HttpSolrClient 实例
+            recordSolrRequest(solrRequest, collection, monitorParams, thisJoinPoint.getThis());
         }
 
         return thisJoinPoint.proceed();
@@ -58,27 +75,24 @@ public abstract class AbstractSolrInstrument extends AbstractHBaseInstrument {
         }
     }
 
-    private RpcParams buildSolrRpcParams(Object request, String collection) throws Exception {
+    private RpcParams buildSolrRpcParams(Object request, String collection) {
         RpcParams.Builder builder = RpcParams.newBuilder();
 
-        // Get request parameters
         try {
             java.lang.reflect.Method getParams = request.getClass().getMethod("getParams");
             Object params = getParams.invoke(request);
 
             if (params != null) {
-                // Convert SolrParams to string representation
                 java.lang.reflect.Method toQueryString = params.getClass().getMethod("toQueryString");
                 String queryString = (String) toQueryString.invoke(params);
                 builder.setBatchedCallDepth(0);
-                builder.setNonBatchParam(queryString);
+                builder.setNonBatchParam(queryString != null ? queryString : "");
             }
         } catch (Exception e) {
             builder.setBatchedCallDepth(0);
             builder.setNonBatchParam("request:" + request.getClass().getSimpleName());
         }
 
-        // Add collection info if present
         if (collection != null) {
             builder.putRemainingParams("collection", collection);
         }
@@ -92,30 +106,43 @@ public abstract class AbstractSolrInstrument extends AbstractHBaseInstrument {
         logBuilder.setNodeId(nodeId.toString());
         logBuilder.setTid(Thread.currentThread().getId());
 
-        // Set timestamp
         Instant time = Instant.now();
         logBuilder.setTimestamp(pfl.shaded.com.google.protobuf.Timestamp.newBuilder()
                 .setSeconds(time.getEpochSecond())
                 .setNanos(time.getNano()).build());
 
-        // Build RPC properties
         RPCMessageProperties.Builder rpcPropBuilder = RPCMessageProperties.newBuilder();
         rpcPropBuilder.setDirection(RPCMessageProperties.Direction.SEND);
         rpcPropBuilder.setMethod(getRequestPath(solrRequest));
         rpcPropBuilder.setParam(params);
 
-        // Try to get the base URL from HttpSolrClient
+        // 设置唯一 ID
+        String requestId = String.valueOf(System.nanoTime());
+        rpcPropBuilder.setId(requestId);
+
+        // 设置 from 地址
+        try {
+            String fromIP = java.net.InetAddress.getLocalHost().getHostAddress() + ":0";
+            rpcPropBuilder.setFrom(fromIP);
+        } catch (Exception e) {
+            rpcPropBuilder.setFrom("localhost:0");
+        }
+
+        // 设置 to 地址 - 从 HttpSolrClient 获取 baseUrl
+        String toAddr = "unknown:0";
         if (httpClient != null) {
             try {
                 java.lang.reflect.Method getBaseURL = httpClient.getClass().getMethod("getBaseURL");
                 String baseUrl = (String) getBaseURL.invoke(httpClient);
                 if (baseUrl != null) {
-                    rpcPropBuilder.setTo(baseUrl);
+                    java.net.URL url = new java.net.URL(baseUrl);
+                    toAddr = url.getHost() + ":" + (url.getPort() > 0 ? url.getPort() : url.getDefaultPort());
                 }
             } catch (Exception e) {
-                // Ignore
+                if (TRACE) e.printStackTrace();
             }
         }
+        rpcPropBuilder.setTo(toAddr);
 
         logBuilder.setRpcProperty(rpcPropBuilder.build());
         logQueue.offer(logBuilder.build());

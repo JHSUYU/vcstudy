@@ -89,6 +89,7 @@ public abstract class AbstractHBaseInstrument extends BlockRpcSvcImplBase
         if (!useLocalLog) // Use remote logging
         {            
             monitorPos = System.getProperty("pfl.monitor.endpoint");
+            System.out.println("### Remote logging to " + monitorPos);
 
             // Local gRPC server listening for requests
             Socket tmpSock = new Socket(monitorPos, 44444);

@@ -1,8 +1,9 @@
 <aspectj>
     <aspects>
         <concrete-aspect name="pfl.SolrInstrument" extends="pfl.AbstractSolrInstrument">
+            <!-- 匹配所有三个 request 方法重载 -->
             <pointcut name="rpcSend"
-                      expression="execution(* org.apache.solr.client.solrj.impl.HttpSolrClient.request(org.apache.solr.client.solrj.SolrRequest, java.lang.String))"/>
+                      expression="execution(* org.apache.solr.client.solrj.impl.HttpSolrClient.request(org.apache.solr.client.solrj.SolrRequest, ..))"/>
             <pointcut name="rpcReceive_processReq"
                       expression="execution(* org.apache.solr.handler.RequestHandlerBase+.handleRequest(..))"/>
             <pointcut name="rpcReceive"

@@ -38,7 +38,7 @@ public class RPCLogServer extends MsgSvcImplBase
         // Start gRPC server
         RPCLogServer logServer = new RPCLogServer();
         logServer.ctx = new MonitorContext();
-        logServer.ctx.server = NettyServerBuilder.forAddress(new InetSocketAddress("172.17.0.1", 44444)).maxInboundMessageSize(2147483647).addService(logServer).build();
+        logServer.ctx.server = NettyServerBuilder.forAddress(new InetSocketAddress("10.10.1.3", 44444)).maxInboundMessageSize(2147483647).addService(logServer).build();
         logServer.ctx.server.start();
 
         logServer.ctx.fatalLogHandler = new FatalLogHandler(logServer.ctx);
