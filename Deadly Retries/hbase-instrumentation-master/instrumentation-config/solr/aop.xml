@@ -1,0 +1,12 @@
+<aspectj>
+    <aspects>
+        <concrete-aspect name="pfl.SolrInstrument" extends="pfl.AbstractSolrInstrument">
+            <pointcut name="rpcSend"
+                      expression="execution(* org.apache.solr.client.solrj.impl.HttpSolrClient.request(org.apache.solr.client.solrj.SolrRequest, java.lang.String))"/>
+            <pointcut name="rpcReceive_processReq"
+                      expression="execution(* org.apache.solr.handler.RequestHandlerBase+.handleRequest(..))"/>
+            <pointcut name="rpcReceive"
+                      expression="call(* org.apache.solr.handler.RequestHandlerBase+.handleRequestBody(..)) AND cflow(rpcReceive_processReq())"/>
+        </concrete-aspect>
+    </aspects>
+</aspectj>

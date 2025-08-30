@@ -151,5 +151,28 @@
         </resources>
       </build>
     </profile>
+
+      <profile>
+          <id>solr</id>
+          <build>
+              <finalName>solr-instrumentation-${project.version}</finalName>
+              <resources>
+                  <resource>
+                      <directory>instrumentation-config/solr</directory>
+                      <includes>
+                          <include>inst.config</include>
+                      </includes>
+                  </resource>
+
+                  <resource>
+                      <directory>instrumentation-config/solr</directory>
+                      <includes>
+                          <include>aop.xml</include>
+                      </includes>
+                      <targetPath>META-INF</targetPath>
+                  </resource>
+              </resources>
+          </build>
+      </profile>
   </profiles>
 </project>
