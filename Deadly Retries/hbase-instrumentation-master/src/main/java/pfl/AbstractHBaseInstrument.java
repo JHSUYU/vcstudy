@@ -58,7 +58,7 @@ import org.apache.log4j.Logger;
 @Aspect
 public abstract class AbstractHBaseInstrument extends BlockRpcSvcImplBase
 {
-    private final MsgSvcBlockingStub logStub;
+    public final MsgSvcBlockingStub logStub;
     Set<Long> grpcThreadMask = ConcurrentHashMap.newKeySet();
     Queue<CallLog> logQueue = Queues.synchronizedQueue(EvictingQueue.create(5000));
     UUID nodeId;

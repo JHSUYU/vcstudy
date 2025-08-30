@@ -1,0 +1,24 @@
+<aspectj>
+    <aspects>
+        <concrete-aspect name="pfl.HadoopInstrument" extends="pfl.AbstractHadoopInstrument">
+            <!-- Client sending RPC request -->
+            <pointcut name="rpcSend"
+                      expression="execution(void org.apache.hadoop.ipc.Client.Connection.sendRpcRequest(org.apache.hadoop.ipc.Client.Call))"/>
+
+            <!-- Server processing RPC request -->
+            <pointcut name="rpcReceive_processReq"
+                      expression="execution(* org.apache.hadoop.ipc.Server.processRpcRequest(..))"/>
+
+            <!-- Server.RpcCall constructor within processRpcRequest flow -->
+            <pointcut name="rpcReceive"
+                      expression="execution(org.apache.hadoop.ipc.Server.RpcCall.new(..)) AND cflow(rpcReceive_processReq())"/>
+        </concrete-aspect>
+    </aspects>
+
+    <weaver options="-Xset:weaveJavaxPackages=true -XnoInline -Xlint:ignore">
+        <include within="org.apache.hadoop.ipc.*"/>
+        <include within="org.apache.hadoop.hdfs.*"/>
+        <include within="org.apache.hadoop.yarn.*"/>
+        <include within="pfl.*"/>
+    </weaver>
+</aspectj>
